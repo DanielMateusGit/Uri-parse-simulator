@@ -5,4 +5,6 @@ The main purpouse of this project was to understand the basics of declarative an
 paradigm.
 
 Everything has been tested on SWI_PROLOG and LISPWORKS.
-The syntax parsed is specified in the pdf.
+The syntax parsed is specified in the pdf 202202 LP E2P URI v4.pdf
+
+The project was evaluated 30/30 and the general knowledge of both paradigs 28/30.
