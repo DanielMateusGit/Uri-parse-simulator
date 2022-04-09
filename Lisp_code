@@ -1,0 +1,1106 @@
+(defstruct uri-structure
+  Scheme
+  UserInfo
+  Host
+  Port
+  Path
+  Query
+  Fragment)
+
+;; --- funzioni per caricare i rispettivi campi  ----
+
+;;funzione per caricare i dati di scheme, userinfo e l'ultima cond di host
+(defun carica (resto caratteri_letti input id)
+  (list (append resto (cdr input))
+	(list id (convert_charlist caratteri_letti))))
+	      
+
+;;funzione per caricare host,port che utilizzano parse_aux_syntax
+(defun carica_aux_syntax (resto caratteri_letti input finale id)
+
+  (list (append (list finale) resto (cdr input))
+        (list id (convert_charlist caratteri_letti))))
+
+
+;funzione che ritorna -> lista (lista_resto lista_parse_uri)
+(defun carica_aux2 (input_aux resto)
+  (list (car resto)
+ 	(append (cdr input_aux)
+		(cdr resto))))
+;funzione che ritorna > lista (lista_resto) quando abbiamo un elemento
+(defun carica_aux1 (output)
+  (list (car output)
+	(cdr output)))
+
+;la si utilizza quando abbiamo la lista semplice (quindi non la lista di liste)
+;la testa della lista del parse (cdr input_aux) � alla testa 
+(defun carica_concatenazione (input_aux resto)
+  (list (car resto)
+        (concat-lists (cdr input_aux)
+		      (car (cdr resto)))))
+;la si utilizza quando abbiamo la lista semplice alla coda del parse
+(defun carica_concatenazione_1 (input_aux resto)
+  (list (car resto)
+        (concat-lists (car (cdr resto))
+		      (cdr input_aux))))
+;ritorna la concatenazione di due liste contenente entrambe liste come
+;argomenti 
+(defun carica_concatenazione_2 (input_aux resto)
+  (list (car resto)
+        (concat-lists (car (cdr input_aux))
+		      (car (cdr resto)))))
+
+
+;funzione utile a concatenare liste		      
+(defun concat-lists (seq1 seq2)
+  (if (null seq1)
+      seq2
+    (cons (car seq1) (concat-lists (cdr seq1) seq2))))
+
+;funzione utile per caricare le concatenazioni dei diversi output!
+(defun concatenazione_syntax (funzione_concatenazione funzione_parse
+						      resto_lista)
+  (let ((out_resto_parse (funcall funzione_parse (car resto_lista))))
+    (cond ((equal out_resto_parse 1) 1)
+	  (t (funcall funzione_concatenazione resto_lista out_resto_parse)))))
+
+(defun concatenazione_syntax_path_zos (funzione_concatenazione funzione_parse
+							   resto_lista
+							   arg2)
+  (let ((out_resto_parse (funcall funzione_parse (car resto_lista) arg2)))
+    (cond ((equal out_resto_parse 1) 1)
+	  (t (funcall funzione_concatenazione resto_lista out_resto_parse)))))
+			 
+
+
+;;funzione per caricare port
+;(defun carica_p (resto caratteri_letti input)
+;  (list (append resto (cdr input))
+;	(list (intero (convert_charlist risultato)))))
+
+
+
+
+
+;;---- FUNZIONI UTILI A TRASFORMARE UNA LISTA IN UNA STRINGA ----
+
+(defun coerce_list (stringa)
+  (coerce stringa 'list))
+
+(defun convert_singleChar (char)
+  (string char))
+
+(defun convert_charlist(lista)
+  (let ((a (mapcar #'convert_singleChar lista)))
+  (concatenate_string a)))
+
+(defun concatenate_string(lista)
+  (cond ((null lista) nil)
+	(t (concatenate 'string (car lista) (concatenate_string (cdr
+								 lista))))))
+
+;;---- CONTROLLARE I CARATTERI DEL USER
+
+(defun check (carattere lista_char_proibiti)
+  (cond ((null lista_char_proibiti) t)
+	((eql carattere (car lista_char_proibiti)) nil)
+	(t (check carattere (cdr lista_char_proibiti)))))
+
+(defun check_user (carattere)
+  (check carattere '(#\/ #\? #\# #\@ #\: nil)))
+
+;;---- CONTROLLARE I CARATTERI DEL HOST
+(defun check_host (carattere)
+  (check carattere '(#\. #\/ #\? #\# #\@ #\: nil)))
+
+;;---- IS-DIGIT ----
+(defun check_digit (carattere lista_digit)
+  (cond ((null lista_digit) nil)
+	((eql carattere (car lista_digit)) t)
+	(t (check_digit carattere (cdr lista_digit)))))
+
+(defun is_digit (carattere)
+  (check_digit carattere '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9)))
+
+;;----- CONVERTIRE DA STRINGA A INTERO -------
+;questa funzione sar� utile in port per salvare l'output come intero
+
+(defun intero (stringa)
+  (+ (parse-integer stringa) 0))
+
+;----- CLEAN -----
+(defun clean (input)
+  input)
+;;---- PARSE-SCHEME-----
+
+;questa funzione controlla se c'� il carattere terminatore ":" e ritorna la
+;stringa rimanente dopo ":" 
+
+(defun scheme (input caratteri_letti resto)
+ ; (setf (uri-structure-Port *uri*) 80)
+
+  (cond ((eql (check_user (car input)) t)
+	 (scheme (cdr  input)
+		 (append caratteri_letti (list (car input)))
+		 resto))
+;se abbiamo ":" come carattere terminale e i caratteri_letti non sono vuoti ->
+;carichiamo il tutto in scheme altrimenti lanciamo "1" per indicare un errore
+	((eql (car input) #\:)
+	 (cond ((eq (equal caratteri_letti nil) nil)
+	;	(carica_scheme caratteri_letti)
+	;	(append resto (cdr input)))
+		(carica resto caratteri_letti input 1))
+	       
+	       (t 1)))
+
+	(t 1)))
+
+(defun parse_scheme (input)
+  (scheme (coerce_list input) nil nil))
+
+;;---- PARSE AUTHOTITHY ----
+
+
+;;--- PARSE USERINFO ----
+(defun user_info (input caratteri_letti resto)
+  (cond ((eql (check_user (car input)) t)
+	 (user_info (cdr input)
+			  (append caratteri_letti (list (car input)))
+			  resto))
+
+	((eql (car input) #\@)
+	  (cond ((eq (equal caratteri_letti nil) nil)
+		 
+	         ;(carica_user_info caratteri_letti)
+		 ;(append resto (cdr input)))
+		 (carica resto caratteri_letti input 2))
+		
+
+		(t 1)))
+         ;altrimenti se input � vuota 
+
+
+	(t 1)))
+
+(defun parse_user_info (input)
+  (user_info (coerce_list input) nil nil))
+
+;; ----- PARSE HOST ----
+
+;funzione che generalizza le funzioni di carica_struttura e append di
+					;parse_port - parse_host
+;se dopo ":" abbiamo cdr non vuoto e abbiamo letto almeno qualche
+;carattere valido  -> restituisci resto
+(defun parse_aux_syntax (input caratteri_letti resto finale id)
+    (cond ((and (eq (equal (cdr input) nil) nil)
+		(eq (equal caratteri_letti nil) nil))
+	   (carica_aux_syntax resto caratteri_letti input finale id))  
+	; (funcall funzione caratteri_letti)
+	 ;(append (list finale) resto (cdr input)))
+	 
+	  (t 1)))
+  
+
+
+
+(defun host (input caratteri_letti resto)
+  (cond ((eql (check_host (car input)) t)
+	 (host (cdr input)
+		     (append caratteri_letti (list (car input)))
+		     resto))
+
+
+	((eql (car input) #\.)
+	 (cond ((and (eq (equal (second input) #\.) nil)
+		     (eq (equal (cdr input) nil) nil)
+		     (eq (equal caratteri_letti nil) nil))
+		(host (cdr input)
+		      (append caratteri_letti (list (car input)))
+		      resto))
+	       (t 1)))
+        ;se dopo ":" abbiamo cdr non vuoto e abbiamo letto almeno qualche
+	;carattere valido  -> restituisci resto 
+	((eql (car input) #\:)
+	 (parse_aux_syntax input caratteri_letti resto #\: 3))
+       
+	((eql (car input) #\?)
+	 (parse_aux_syntax input caratteri_letti resto #\? 3))
+	
+	((eql (car input) #\#)
+	 (parse_aux_syntax input caratteri_letti resto #\# 3))
+       
+	((eql (car input) #\/)
+	 (parse_aux_syntax input caratteri_letti resto #\/ 3))
+        ;se tutti i caratteri letti sono giusti e quindi dopo non abbiamo niente
+	((null input)
+	 (cond ((eq (equal caratteri_letti nil) nil)
+		(carica resto caratteri_letti input 3))
+	;	(carica_host caratteri_letti)
+;		(append resto (cdr input)))
+
+	       (t 1)))
+	
+	;manca il controllo per path!
+	(t 1)))
+
+(defun parse_host (input)
+  (host (coerce_list input) nil nil))
+
+
+
+;;---PARSE-PORT ----
+(defun port (input caratteri_letti resto)
+
+  (cond ((eql (is_digit (car input)) t)
+	 (port (cdr input)
+	       (append caratteri_letti (list (car input)))
+	       resto))
+       
+	((eql (car input) #\?)
+	 (parse_aux_syntax input caratteri_letti resto #\? 4))
+	
+	((eql (car input) #\#)
+	 (parse_aux_syntax input caratteri_letti resto #\# 4))
+
+	((eql (car input) #\/)
+	 (parse_aux_syntax input caratteri_letti resto #\/ 4))
+      ;se tutti i caratteri letti sono giusti e quindi dopo non abbiamo niente
+	((null input)
+	 (cond ((eq (equal caratteri_letti nil) nil)
+		(carica resto caratteri_letti input 4))
+	;	(carica_port caratteri_letti)
+	;	(append resto (cdr input)))
+
+	       (t 1)))
+	;manca il controllo per path!
+	(t 1)))
+
+(defun parse_port (input)
+  (port (coerce_list input) nil nil ))
+
+;questa funzione serve a generalizzare il da fare dopo parse_user_info in
+;parse_unione_authorithy 
+(defun authorithy_aux (input)
+   (let ((output_host (parse_host input)))
+	    
+	     (cond ((eq (equal output_host 1) t) output_host)
+             ;ricordiamo che output_host � una lista contenente due liste, le
+	     ;quali a loro volta contengono rispettivamente il resto e il parse
+	     ;risultante dei caratteri letti di host
+		   ((eq (equal (car output_host) nil) t) (carica_aux1
+							  output_host))
+
+	     ;nel caso ritornasse un cdr diverso da 1 e nil -> proseguiamo con
+	     ;parse_port, controllando prima che il primo carattere sia #\: NB
+	     ;poniamo (car (car output_host)) per via delle due liste di
+	     ;output_host 
+		   (t (if (eq (car (car output_host)) #\:)
+			  (let ((output_port (parse_port
+					      (cdr (car output_host)))))
+				
+			    (cond ((equal output_port 1) output_port)
+
+				  (t (carica_aux2 output_host
+						  output_port))))
+		       ;condizione nel caso non ci siano i ":" per port
+			(cond ((equal output_host 1) output_host)
+			      (t (carica_aux1 output_host))))))))
+
+;;funzione che unisce il parse di  // al resto di authorithy
+;MB input in questo caso � solo una lista che contiene il resto
+(defun parse_unione_authorithy (input)
+  ;controlliamo se abbiamo // all'inizio di autrhorithy
+  (cond ((and (eq (eql (first input) #\/) t)
+	      (eq (eql (second input) #\/) t))
+	 ;Nb parse_user_info ritornera due liste una contenenete il resto e
+	 ;l'altra contenente il parse di userinfo
+	 (let ((out_userInfo (parse_user_info (cdr (cdr input)))))
+    ;nel caso il parse con user_info non andasse bene -> proviamo con parse_host
+	   (cond ((eq (equal out_userInfo 1) t)
+		  (authorithy_aux (cdr (cdr input))))
+		 ;mettiamo (car a) per prendere in considerazione la prima
+		 ;lista ritornata da a che sarebbe l'output della funzione
+		 ;parse_user_info
+		 (t (concatenazione_syntax 'carica_concatenazione
+					   'authorithy_aux
+					   out_userInfo)))))
+
+	(t 1)))
+
+
+
+
+;;funzione principale per chiamare authorithy
+;;se authorithy � corretto -> restituisce nil o cdr
+;;altrimenti cancella la strutura dati di authorithy e ritorna 1
+(defun parse_authorithy (input)
+  (let ((a (parse_unione_authorithy (coerce_list input))))
+    (cond ((eql a 1) 1)
+
+	  (t a))))
+
+;;---- FRAGMENT -----
+(defun parse_fragment (input)
+  (fragment (coerce_list input) nil nil))
+
+(defun fragment (input caratteri_letti resto)
+  (cond ((characterp (car input))
+	 (fragment (cdr input)
+			 (append caratteri_letti (list (car input)))
+			 resto))
+
+	((and (null input)
+	      (eq (equal caratteri_letti nil) nil))
+	 (carica resto caratteri_letti input 7))
+	 
+	 ;(carica_fragment caratteri_letti)
+	 ;(append resto (cdr input)))
+
+	(t 1)))
+
+;;----- QUERY ------
+(defun parse_query (input)
+  (query (coerce_list input) nil nil))
+
+(defun query (input caratteri_letti resto)
+  (cond ((and (eq (eql (car input) #\#) nil)
+	      (eq (equal input nil) nil))
+	 (query (cdr input)
+		(append caratteri_letti (list (car input)))
+		resto))
+
+	((eql (car input) #\#)
+	 (parse_aux_syntax input caratteri_letti resto #\# 6))
+		     
+
+	((null input)
+	 (carica resto caratteri_letti input 6))
+;	 (carica_query caratteri_letti)
+;	 (append resto (cdr input)))
+
+	(t 1)))
+;---- PATH ----
+(defun parse_path (input)
+  (path (coerce_list input) nil nil))
+
+(defun path (input caratteri_letti resto)
+  (cond ((eql (check_user (car input)) t)
+	 (path (cdr input)
+	       (append caratteri_letti (list (car input)))
+	       resto))
+
+	((eql (car input) #\/)
+	 (cond ((and (eq (equal (second input) #\/) nil)
+		  ;   (eq (equal (cdr input) nil) nil)
+		     (eq (equal caratteri_letti nil) nil))
+		(path (cdr input)
+		      (append caratteri_letti (list (car input)))
+		      resto))
+	       (t 1)))
+       
+        ;se dopo "?,#" abbiamo cdr non vuoto e abbiamo letto almeno qualche
+	;carattere valido  -> restituisci resto 
+       
+	((eql (car input) #\?)
+	 (parse_aux_syntax input caratteri_letti resto #\? 5))
+	
+	((eql (car input) #\#)
+	 (parse_aux_syntax input caratteri_letti resto #\# 5))
+	
+       ;se tutti i caratteri letti sono giusti e quindi dopo non abbiamo niente
+	((null input)
+	 (cond ((eq (equal caratteri_letti nil) nil)
+		(carica resto caratteri_letti input 5))
+	;	(carica_path caratteri_letti)
+	;	(append resto (cdr input)))
+
+	       (t 1)))
+      
+	(t 1)))
+
+;funzione che VALUTA fragment e ritorna la (lista resto parse fragment)
+(defun _fragment (output)
+  (let ((out_fragment (parse_fragment (cdr output))))
+    (cond ((equal out_fragment 1)
+	   ;(clean nil)
+	   1)
+
+	  (t out_fragment))))
+;funzione che valuta fragment e ritorna la (lista resto (lista parse fragment)) 
+(defun _fragment2 (output)
+  (let ((out_fragment (parse_fragment (cdr output))))
+    (cond ((equal out_fragment 1)
+	   ;(clean nil)
+	   1)
+
+	  (t (carica_aux1 out_fragment)))))
+
+
+
+;funzione ausiliare per query_fragment 
+(defun query_fragment_aux (out_query)
+  (let ((out_fragment (_fragment (car out_query))))
+    (cond ((equal out_fragment 1) 1)
+	  (t (carica_aux2 out_query
+			  out_fragment)))))
+
+;funzione che VALUTA query->fragment
+(defun query_fragment (output)
+  (cond ((eql (first output) #\?)
+	 (let ((out_query (parse_query (cdr output))))
+	   (cond ((equal out_query 1) 1)
+		 ((equal (car out_query) nil) (carica_aux1 out_query))
+		 ;metto (car out_query)
+		 (t (query_fragment_aux out_query)))))
+	
+	((eql (first output) #\#)
+	 (_fragment2 output))
+;altrimenti 1
+	(t 1)))
+
+
+(defun authorithy_path_resto (input funzione)
+  (let ((out_authorithy (parse_authorithy input)))
+
+    (cond   ((equal out_authorithy 1) 1)
+	    ((equal (car out_authorithy) nil) out_authorithy)
+ 	  
+          ;se abbiamo / siamo obbligati a farse il parse del path
+	    (t (cond ((eql (car (car out_authorithy)) #\/)
+		      (let ((out_path (funcall funzione
+					       (cdr (car out_authorithy)))))
+			(cond  ((equal out_path 1) 1)
+			       ((equal (car out_path) nil)
+				(list (car out_path)
+				      ;questa parte potremmo farla con
+				      ;carica_concatenazione_1
+				      (concat-lists (car (cdr out_authorithy))
+						    (cdr out_path))))
+			     
+			      ;in questa parte controlliamo se query_fragment �
+			      ;corretto o meno
+			       (t (let ((out_conca (concatenazione_syntax
+						   'carica_concatenazione
+						   'query_fragment
+						   out_path)))
+				    ;se � corretto allora concateniamo a
+				    ;out_authorithhy e path altrimenti
+				    ;ritorniamo 
+				    (cond ((equal out_conca 1) 1)
+					  (t (carica_concatenazione_2
+					      out_authorithy
+					      out_conca))))))))
+				   
+		     ((eql (car (car out_authorithy)) #\?)
+		      (concatenazione_syntax 'carica_concatenazione_2
+					     'query_fragment
+					     out_authorithy))
+
+		     ((eql (car (car out_authorithy)) #\#)
+		      (concatenazione_syntax 'carica_concatenazione_2
+					     '_fragment2
+					     out_authorithy))
+
+		     (t 1))))))
+
+
+
+;NB in questo parse in output � compreso / ma comunque con i diversi cdr e out
+;lo ovviamo
+ (defun /parse (output funzione)
+   (cond ((eql (first output) #\?)
+	  (if (eq (equal (cdr output) nil) nil)
+	      (query_fragment output)
+	    1))
+
+	((eql (first output) #\#)
+	 (_fragment2 output))
+
+	(t (let ((out_path (funcall funzione output)))
+
+	     (cond ((equal out_path 1) 1)
+		   ((equal (car out_path) nil) (carica_aux1 out_path))
+	      
+		   (t (concatenazione_syntax 'carica_concatenazione
+					     'query_fragment
+					     out_path)))))))
+
+      
+
+;in questa parte uniamo scheme a tutte le possibili opzioni tra (// / # ?
+; e caratteri path)
+(defun parte_1 (input)
+  (let ((out_scheme (parse_scheme input)))
+    ;se out_scheme � uguale a nil allora ritorniamo out_scheme
+    (cond ((equal out_scheme 1) 1)
+	  ((equal (car out_scheme) nil) (carica_aux1 out_scheme))
+
+	  ;altrimenti 
+	  (t (cond ((and (eql (first (car out_scheme)) #\/)
+			 (eql (second (car out_scheme)) #\/))
+		    (concatenazione_syntax_path_zos 'carica_concatenazione
+						    'authorithy_path_resto
+						    out_scheme
+						    'parse_path))
+
+		   ((eql (first (car out_scheme)) #\?)
+		    (if (eq (equal (cdr (car out_scheme)) nil) nil)
+		    (concatenazione_syntax 'carica_concatenazione
+					   'query_fragment
+					   out_scheme)
+		    1))
+
+		   
+		   ((eql (first (car out_scheme)) #\#)
+		    (if (eq (equal (cdr (car out_scheme)) nil) nil)
+			(concatenazione_syntax 'carica_concatenazione
+					       '_fragment2
+					       out_scheme)
+		    1))
+                   ;in questa parte, mediante la list chiamiamo il cdr di
+		   ;out_scheme in specie quella del resto
+		   ((eql (first (car out_scheme)) #\/)
+		    (if (eq (equal (cdr (car out_scheme)) nil) nil) 
+			(concatenazione_syntax_path_zos
+			 'carica_concatenazione
+			 '/parse
+			 (list (cdr (car out_scheme))
+			       (car (cdr out_scheme)))
+			 'parse_path)
+
+		      (carica_aux1 out_scheme)))
+		    
+		   
+		   (t (concatenazione_syntax_path_zos 'carica_concatenazione
+						      '/parse
+						      out_scheme
+						      'parse_path)))))))
+
+
+;;---URI-2--------
+(defun parse_scheme_mailto (input)
+  (parse_scheme_syntax (coerce_list input)
+		       nil
+		       nil
+		       '(#\m #\a #\i #\l #\t #\o)
+		       0
+		       6))
+
+(defun parse_scheme_news (input)
+  (parse_scheme_syntax (coerce_list input)
+		       nil
+		       nil
+		       '(#\n #\e #\w #\s)
+		       0
+		       4))
+
+(defun parse_scheme_tel (input)
+  (parse_scheme_syntax (coerce_list input)
+		       nil
+		       nil
+		       '(#\t #\e #\l)
+		       0
+		       3))
+
+(defun parse_scheme_fax (input)
+  (parse_scheme_syntax (coerce_list input)
+		       nil
+		       nil
+		       '(#\f #\a #\x)
+		       0
+		       3))
+
+
+(defun parse_scheme_zos (input)
+  (parse_scheme_syntax (coerce_list input)
+		       nil
+		       nil
+		       '(#\z #\o #\s)
+		       0
+		       3))
+
+
+
+(defun parse_scheme_syntax (input caratteri_letti resto syntax contatore size)
+  (cond   ((null input)
+	   (cond ((= contatore size)
+		  1)
+
+		 (t 1)))
+
+
+	  ((eql (car input) (car syntax))
+           (parse_scheme_syntax (cdr input)
+				(append caratteri_letti
+					(list (car input)))
+				resto
+				(cdr syntax)
+				(+ contatore 1)
+				size))
+ 
+	  ((eql (car input) #\:)
+	   (cond ((and (eq (equal caratteri_letti nil) nil)
+		       (= contatore size))
+	          (carica resto caratteri_letti input 1))
+
+		 (t 1)))
+
+	  (t 1)))
+
+;; ---- MAILTO ----
+(defun parse_user_info_mailto (input)
+  (user_info_mailto (coerce_list input) nil nil))
+
+(defun user_info_mailto (input caratteri_letti resto)
+  ;se carattere corretto -> continua ad evaluare con la riscorsione
+  (cond ((eql (check_user (car input)) t)
+	 (user_info_mailto (cdr input)
+			   (append caratteri_letti (list (car input)))
+			   resto))
+  ;se car letti  non vuoto e dopo @ non vuoto -> restituisci cdr
+	((eql (car input) #\@)
+	 (cond ((and (eq (equal caratteri_letti nil) nil)
+		     (eq (equal (cdr input) nil) nil))
+	        (carica resto caratteri_letti input 2))
+
+	       (t 1)))
+	       
+
+     	((null input)
+	 (carica resto caratteri_letti input 2))
+
+	(t 1)))
+
+(defun parse_host_mailto (input)
+  (host_mailto (coerce_list input) nil nil))
+
+(defun host_mailto (input caratteri_letti resto)
+  (cond ((eql (check_host (car input)) t)
+	 (host_mailto (cdr input)
+			    (append caratteri_letti
+				    (list (car input)))
+			    resto))
+
+	((eql (car input) #\.)
+	 (cond ((and (eq (equal (second input) #\.) nil)
+		     (eq (equal (cdr input) nil) nil)
+		     (eq (equal caratteri_letti nil) nil))
+		(host_mailto (cdr input)
+			     (append caratteri_letti (list (car input)))
+			     resto))
+	       (t 1)))
+	
+        
+
+	((null input)
+	 (cond ((eq (equal caratteri_letti nil) nil)
+		(carica resto caratteri_letti input 3))
+
+	       (t 1)))
+
+	(t 1)))
+
+(defun parse_pre_mailto (input)
+  (let ((out_user_mailto (parse_user_info_mailto input)))
+    (cond ((equal out_user_mailto 1) 1)
+	  ((equal (car out_user_mailto) nil) (carica_aux1 out_user_mailto))
+	  (t  (concatenazione_syntax 'carica_aux2
+				     'parse_host_mailto
+				     out_user_mailto)))))
+(defun mailto (input)
+  (let ((out_scheme_mailto (parse_scheme_mailto input)))
+    (cond ((equal out_scheme_mailto 1) 1)
+	  ((equal (car out_scheme_mailto) nil) (carica_aux1 out_scheme_mailto))
+	  (t (concatenazione_syntax 'carica_concatenazione
+				    'parse_pre_mailto
+				    out_scheme_mailto)))))
+(defun parse_mailto (input)
+  (mailto (coerce_list input)))
+
+;;----PARSE_NEWS ----
+(defun news (input)
+  (let ((out_scheme_news (parse_scheme_news input)))
+    (cond ((equal out_scheme_news 1) 1)
+	  ((equal (car out_scheme_news) nil) (carica_aux1 out_scheme_news))
+	  (t (concatenazione_syntax 'carica_aux2
+				   'parse_host_mailto
+				   out_scheme_news)))))
+(defun parse_news (input)
+  (news (coerce_list input)))
+
+;;---- PARSE_TEL-----
+(defun parse_user_info_tel (input)
+  (user_info_tel (coerce_list input) nil nil))
+
+(defun user_info_tel (input caratteri_letti resto)
+  (cond ((eql (check_user (car input)) t)
+	 (user_info_tel (cdr input)
+			(append caratteri_letti
+				(list (car input)))
+			resto))
+	((null input)
+	 (carica resto caratteri_letti input 2))
+	
+	(t 1)))
+(defun parse_tel_fax (input)
+  (tel_fax (coerce_list input)))
+
+
+(defun tel_fax (input)
+  (let ((out_scheme_tel (parse_scheme_tel input))
+	(out_scheme_fax (parse_scheme_fax input)))
+    (cond ((eq (equal out_scheme_tel 1) nil)
+	   (cond ((equal (car out_scheme_tel) nil) (carica_aux1
+						    out_scheme_tel))
+		 
+		 (t (concatenazione_syntax 'carica_aux2
+					   'parse_user_info_tel
+					   out_scheme_tel))))
+
+	  (t (cond ((equal out_scheme_fax 1) 1)
+		   ((equal (car out_scheme_fax) nil) (carica_aux1
+						      out_scheme_fax))
+		   (t (concatenazione_syntax 'carica_aux2
+					     'parse_user_info_tel
+					     out_scheme_fax)))))))
+;;---- PARSE-ZOS -----
+
+
+;;---PARSE_ID44----
+(defun parse_id44 (input)
+  (id44 (coerce_list input) nil nil 0 0))
+
+(defun id44 (input caratteri_letti resto contatore aux)
+
+  (cond  ((and (null input) (eq (equal caratteri_letti nil) nil))
+	  (carica resto caratteri_letti input 5))
+
+       ;;controlla se il primo � un alpha
+	 ((and (eq (equal input nil) nil)
+	       (< aux 1)
+	       (< contatore 44))
+	  (cond ((alpha-char-p (car input))
+		 (id44(cdr input)
+		      (append caratteri_letti (list (car input)))
+		      resto
+		      (+ contatore 1)
+		      (+ aux 1)))
+		(t 1)))
+
+      ;;controlla se i caratteri dopo il primo  sono alphanumerici
+	 ((and (eq (equal input nil) nil)
+	       (< contatore 44)
+	       (alphanumericp (car input)))
+	  (id44 (cdr input)
+	       (append caratteri_letti (list (car input)))
+	       resto
+	       (+ contatore 1)
+	       (+ aux 1)))
+
+
+	 ((eql (car input) #\.)
+	  (cond ((and (eq (equal caratteri_letti nil) nil)
+		      (eq (equal (car (cdr input)) #\# ) nil)
+		      (eq (equal (car (cdr input)) #\( ) nil)
+		      (eq (equal (car (cdr input)) #\? ) nil)
+		      (eq (equal (cdr input) nil) nil)
+		      (< contatore 44))
+		 (id44 (cdr input)
+		       (append caratteri_letti (list (car input)))
+		       resto
+		       (+ contatore 1)
+		       aux))
+
+		(t 1)))
+
+
+	 ((eql (car input) #\( )
+	  (cond ((eq (equal (cdr input) nil) nil)
+		 (list (append resto (list (car input))(cdr input))
+		       (list 5 (concatenate
+				'string
+				(convert_charlist
+				 caratteri_letti)
+				(convert_charlist (list (car input)))))))
+		       
+
+		(t 1)))
+
+	 ((eql (car input) #\? )
+	  (cond ((eq (equal (cdr input) nil) nil)
+		 (list (append resto (list (car input))(cdr input))
+		       (list 5 (convert_charlist caratteri_letti))))
+	        
+
+		 (t 1)))
+
+	 ((eql (car input) #\# )
+	  (cond ((eq (equal (cdr input) nil) nil)
+	         (list (append resto (list (car input)) (cdr input))
+		       (list 5 (convert_charlist caratteri_letti))))
+
+		(t 1)))
+
+	 (t 1)))
+
+;;----- id-8 -----
+(defun parse_id8 (input)
+  (id8 (coerce_list input) nil nil 0 0))
+
+(defun id8 (input caratteri_letti resto contatore aux)
+
+  (cond   ((and (eq (equal input nil) nil)
+		(< aux 1)
+		(< contatore 8))
+	   (cond ((alpha-char-p (car input))
+		  (id8 (cdr input)
+		       (append caratteri_letti (list (car input)))
+		       resto
+		       (+ contatore 1)
+		       (+ aux 1)))
+
+		 (t 1)))
+
+
+	  ((and (eq (equal input nil) nil)
+		(< contatore 8) (alphanumericp (car input)))
+	   (id8 (cdr input)
+		(append caratteri_letti (list (car input)))
+		resto
+		(+ contatore 1)
+		(+ aux 1)))
+
+
+	  ((eql (car input) #\) )
+	   (cond ((eq (equal caratteri_letti nil) nil)
+		  (list (append resto (cdr input))
+			(list 5 (concatenate 'string 
+					     (convert_charlist caratteri_letti)
+					     (convert_charlist
+					      (list (car input)))))))
+		 (t 1)))
+
+	  (t 1)))
+(defun zos_aux_carica (lista_resto lista_parse)
+  (list (car lista_resto)
+	(list 5 (concatenate 'string (car (cdr (second lista_parse)))
+			     (car (cdr (second lista_resto)))))))
+
+(defun path_zos (input)
+  (let ((out_id44 (parse_id44 input)))
+
+    (cond ((equal out_id44 1) 1)
+	  ((equal (car out_id44) nil) out_id44)
+
+          (t  (cond ((eql (car (car out_id44 )) #\? ) out_id44)
+		    ((eql (car (car out_id44))  #\# ) out_id44)
+		    ((eql (car (car out_id44))  #\( )
+		     (let ((out_id8 (parse_id8 (cdr (car out_id44)))))
+
+			 (cond ((equal out_id8 1) 1)
+			       (t (zos_aux_carica out_id8 out_id44))))))))))
+
+(defun parse_zos (input)
+  (let ((out_scheme_zos (parse_scheme_zos input)))
+    ;se out_scheme � uguale a nil allora ritorniamo out_scheme
+    (cond ((equal out_scheme_zos 1) 1)
+	  ((equal (car out_scheme_zos) nil) (carica_aux1 out_scheme_zos))
+
+	  ;altrimenti 
+	  (t (cond ((and (eql (first (car out_scheme_zos)) #\/)
+			 (eql (second (car out_scheme_zos)) #\/))
+		    (concatenazione_syntax_path_zos 'carica_concatenazione
+						    'authorithy_path_resto
+						    out_scheme_zos
+						    'path_zos))
+
+		   ((eql (first (car out_scheme_zos)) #\?)
+		    (if (eq (equal (cdr (car out_scheme_zos)) nil) nil)
+		    (concatenazione_syntax 'carica_concatenazione
+					   'query_fragment
+					   out_scheme_zos)
+		    1))
+
+		   
+		   ((eql (first (car out_scheme_zos)) #\#)
+		    (if (eq (equal (cdr (car out_scheme_zos)) nil) nil)
+			(concatenazione_syntax 'carica_concatenazione
+					       '_fragment2
+					       out_scheme_zos)
+		    1))
+                   ;in questa parte, mediante la list chiamiamo il cdr di
+		   ;out_scheme in specie quella del resto
+		   ((eql (first (car out_scheme_zos)) #\/)
+		    (if (eq (equal (cdr (car out_scheme_zos)) nil) nil) 
+			(concatenazione_syntax_path_zos
+			 'carica_concatenazione
+			 '/parse
+			 (list (cdr (car out_scheme_zos))
+			       (car (cdr out_scheme_zos)))
+			 'path_zos)
+
+		      (carica_aux1 out_scheme_zos)))
+		    
+		   
+		   (t (concatenazione_syntax_path_zos 'carica_concatenazione
+						      '/parse
+						      out_scheme_zos
+						      'path_zos)))))))
+	     
+		   
+				
+			      
+;;---- PARSE-URI2 ----
+(defun uri_2 (input)
+  (let ((out_parse_mailto (parse_mailto input))
+	(out_parse_news (parse_news input))
+	(out_parse_tel_fax (tel_fax input))
+	(out_parse_zos (parse_zos input)))
+    (cond ((eq (equal out_parse_mailto 1) nil)
+	   out_parse_mailto)
+
+	  (t (cond ((eq (equal out_parse_news 1) nil)
+		    out_parse_news)
+
+		   (t (cond ((eq (equal out_parse_tel_fax 1) nil)
+			     out_parse_tel_fax)
+
+			    (t (eq (equal out_parse_zos 1) nil)
+			       out_parse_zos))))))))
+
+
+;;----- URI-PARSE ------
+(defun uri_parse (input)
+  (let ((out_scheme_mailto (parse_scheme_mailto input))
+	(out_scheme_news (parse_scheme_news  input))
+	(out_scheme_tel (parse_scheme_tel input))
+	(out_scheme_fax (parse_scheme_fax input))
+	(out_scheme_zos (parse_scheme_zos input)))
+
+    (cond ((and (equal out_scheme_mailto 1)
+		(equal out_scheme_news 1)
+		(equal out_scheme_tel 1)
+		(equal out_scheme_fax 1)
+		(equal out_scheme_zos 1))
+	   (parte_1 input))
+
+	  (t (uri_2 input)))))
+
+;;-----URI-PARSE  ----
+(defun extract_aux (lista numero)
+  (if (equal (car (car lista)) numero)
+      (second (car lista))
+    nil))
+
+(defun extract (lista numero)
+  (cond ((null lista) nil)
+
+        ((eq (equal (extract_aux lista numero) nil) nil)
+	 (second (car lista)))
+
+	(t (extract (cdr lista) numero))))
+(defun port_aux (input)
+  (cond ((eq input nil) (+ 0 80))
+	(t (intero input))))
+
+
+ ;;FUNZIONI PRINCIPALI RICHIESTE DAL PDF
+ (defun uri-parse (input)
+   (let ((out_parse (uri_parse input)))
+     (cond ((equal out_parse 1) nil)
+	   (t (make-uri-structure
+	       :Scheme (extract (second out_parse) 1) 
+	       :UserInfo (extract (second out_parse) 2)
+	       :Host (extract (second out_parse) 3)
+	       :Port (port_aux (extract (second out_parse) 4)) 
+	       :Path (extract (second out_parse) 5) 
+	       :Query (extract (second out_parse) 6)
+	       :Fragment (extract (second out_parse) 7))))))
+
+(defun uri-scheme (nome_struttura)
+  (uri-structure-Scheme nome_struttura))
+
+(defun uri-userinfo (nome_struttura)
+  (uri-structure-UserInfo nome_struttura))
+
+(defun uri-host (nome_struttura)
+  (uri-structure-Host nome_struttura))
+
+(defun uri-port (nome_struttura)
+  (uri-structure-Port nome_struttura))
+
+(defun uri-path (nome_struttura)
+  (uri-structure-Path nome_struttura))
+
+(defun uri-query (nome_struttura)
+  (uri-structure-Query nome_struttura))
+
+(defun uri-fragment (nome_struttura)
+  (uri-structure-Fragment nome_struttura))
+
+(defun create_stream (nome_file nome_struttura)
+  (with-open-file (out nome_file
+		       :direction :output
+		       :if-exists :supersede
+		       :if-does-not-exist :create)
+		  (format out "Scheme: ~S ~%UserInfo: ~S ~%Host: ~S ~%Port: ~S 
+Path: ~S ~%Query: ~S ~%Fragment ~S"
+			  (uri-scheme nome_struttura)
+			  (uri-userinfo nome_struttura)
+			  (uri-host nome_struttura)
+			  (uri-port nome_struttura)
+			  (uri-path nome_struttura)
+			  (uri-query nome_struttura)
+			  (uri-fragment nome_struttura))))
+
+(defun uri_display_aux (nome_struttura)
+  (format t "Scheme: ~S ~%UserInfo: ~S ~%Host: ~S ~%Port: ~S ~%Path: ~S
+Query: ~S ~%Fragment ~S"
+	  (uri-scheme nome_struttura)
+	  (uri-userinfo nome_struttura)
+	  (uri-host nome_struttura)
+	  (uri-port nome_struttura)
+	  (uri-path nome_struttura)
+	  (uri-query nome_struttura)
+	  (uri-fragment nome_struttura)))
+
+(defun uri-display (nome_struttura &optional nome_file_stream)
+  (if (equal nome_file_stream nil)
+      (uri_display_aux nome_struttura)
+    (create_stream nome_file_stream nome_struttura)))
+
+;;pippo
+		  
+
+	  
+	  
+
+	  
+	  
+
+
+		    
+    
+
+
+
+
+
+
+
+
+
+
+	     
+	  
+
+
+
+
+
+
+	
+
+	
+
+	
